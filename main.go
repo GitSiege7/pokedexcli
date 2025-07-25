@@ -17,7 +17,7 @@ import (
 var commands map[string]cliCommand
 var pokemon map[string]Pokemon
 
-func init() {
+func mapInit() {
 	commands = map[string]cliCommand{
 		"help": {
 			name:        "help",
@@ -46,8 +46,18 @@ func init() {
 		},
 		"catch": {
 			name:        "catch",
-			description: "Takes pokemon name as parameter and attempts to catch and add to pokedex",
+			description: "Takes pokemon name and attempts to catch and add to pokedex",
 			callback:    commandCatch,
+		},
+		"inspect": {
+			name:        "inspect",
+			description: "Takes pokemon name and displays stats if it is in the pokedex",
+			callback:    commandInspect,
+		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "Lists all caught pokemon",
+			callback:    commandPokedex,
 		},
 	}
 
@@ -195,9 +205,11 @@ func commandExplore(c *config, params []string) error {
 	return nil
 }
 
-func catch(data PokemonRes) {
+func catch(data *Pokemon) {
 	if _, ok := pokemon[data.Name]; !ok {
-		pokemon[data.Name] = Pokemon{Name: data.Name, url: }
+		pokemon[data.Name] = *data
+	} else {
+		return
 	}
 }
 
@@ -208,14 +220,14 @@ func commandCatch(c *config, params []string) error {
 
 	url := "https://pokeapi.co/api/v2/pokemon/" + params[0]
 
-	var data PokemonRes
+	var data Pokemon
 
 	err := getData(url, &data, c)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Throwing a Pokeball at", data.Name, "...")
+	fmt.Printf("Throwing a Pokeball at %v...\n", data.Name)
 
 	chance := float64(1.0 - (float64(data.Base_xp) / float64(310)))
 
@@ -231,8 +243,43 @@ func commandCatch(c *config, params []string) error {
 	return nil
 }
 
+func commandInspect(c *config, params []string) error {
+	if len(params) > 1 {
+		return fmt.Errorf("excess parameters: expected 1, got %v", len(params))
+	}
+
+	data, ok := pokemon[strings.ToLower(params[0])]
+	if !ok {
+		return fmt.Errorf("no pokemon found for: %v", strings.ToLower(params[0]))
+	}
+
+	fmt.Printf("Name: %s\nHeight: %d\nWeight: %d\n", data.Name, data.Height, data.Weight)
+
+	fmt.Printf("Stats:\n")
+	for _, s := range data.Stats {
+		fmt.Printf(" - %s: %d\n", s.Stat.Name, s.BaseStat)
+	}
+
+	fmt.Printf("Types:\n")
+	for _, t := range data.Types {
+		fmt.Printf(" - %s\n", t.Type.Name)
+	}
+
+	return nil
+}
+
+func commandPokedex(c *config, params []string) error {
+	fmt.Println("Your Pokedex:")
+
+	for key := range pokemon {
+		fmt.Printf(" - %s\n", key)
+	}
+
+	return nil
+}
+
 func main() {
-	init()
+	mapInit()
 
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -243,6 +290,8 @@ func main() {
 		Prev:  "",
 		Cache: cache,
 	}
+
+	fmt.Println("Use 'help' for list of commands")
 
 	for {
 		fmt.Print("Pokedex > ")
